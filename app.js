@@ -1099,8 +1099,10 @@ function renderElimBar() {
     ...(rer.length ? ['перекручены:', ...rer.map(n => el('span', { class: 'out-chip', text: n }))] : []),
   ];
 
+  // Полоска прогресса нужна только на выбывание (replaceChildren вывел бы null текстом)
+  const progress = elim ? [el('div', { class: 'elim-progress' }, el('i', { style: `width:${clamp(pct, 0, 100)}%` }))] : [];
   bar.replaceChildren(
-    elim ? el('div', { class: 'elim-progress' }, el('i', { style: `width:${clamp(pct, 0, 100)}%` })) : null,
+    ...progress,
     el('div', { class: 'elim-top' },
       head,
       el('div', { class: 'out-list' }, chips.length ? chips : el('span', { class: 'muted', text: hint })),
