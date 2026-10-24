@@ -82,6 +82,7 @@ const state = {
   spinning: false,
   transitioning: false,
   paused: false,
+  lastWonId: null, // последняя разыгранная игра — держим её первой в списке до следующего выбора
   pending: null, // победитель в модалке
 };
 
@@ -646,6 +647,7 @@ async function chooseGame(g) {
   await sleep(3200);
   closeModal('gameModal');
   state.round = { phase: 'players', gameId: g.id, eliminated: state.round.eliminated, out: [], rerolled: [] };
+  state.lastWonId = null;
   state.transitioning = false;
   W.highlight = null;
   renderAll(true);
@@ -729,6 +731,7 @@ function acceptWinner() {
   saveResults();
   closeWinner();
   resetRound();
+  state.lastWonId = g ? g.id : null;
   toast(`🏆 ${p.name} получает ${g ? g.title : 'приз'}!`, 'ok');
   renderAll(true);
 }
@@ -915,6 +918,7 @@ function imgOrPh(src, title) {
   return img;
 }
 
+let lastTopGame = null;
 function renderGames() {
   const box = $('#gamesList');
   const people = Object.values(state.participants);
@@ -926,7 +930,16 @@ function renderGames() {
   const cur = selectedGame();
   const alive = new Set(gamePool().map(g => g.id));
   const out = new Set(state.round.eliminated);
-  state.games.forEach((g, i) => {
+  // Выбранная колесом игра — первой в списке (номер #N у неё остаётся прежним).
+  // После победы там остаётся только что разыгранная игра, пока колесо не выберет следующую.
+  const top = cur || state.games.find(g => g.id === state.lastWonId) || null;
+  const order = state.games.map((g, i) => [g, i]);
+  if (top) order.sort((a, b) => (b[0] === top) - (a[0] === top));
+  if (top !== lastTopGame) {
+    lastTopGame = top;
+    if (top) box.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  order.forEach(([g, i]) => {
     const res = gameResults(g);
     const done = res.length >= g.count;
     const fans = people.filter(p => wantsGame(p, g)).length;
