@@ -1,23 +1,50 @@
 [
   {
-    "title": "Hades II",
-    "steamAppId": "1145350",
+    "title": "Anno 117: Pax Romana",
+    "short": "Anno 117",
+    "steamAppId": "3274580",
     "platform": "Steam"
   },
   {
-    "title": "Hollow Knight",
-    "steamAppId": "367520",
-    "platform": "Steam",
-    "count": 2
-  },
-  {
-    "title": "Stardew Valley",
-    "steamAppId": "413150",
+    "title": "Far Cry 6",
+    "steamAppId": "2369390",
     "platform": "Steam"
   },
   {
-    "title": "Terraria",
-    "steamAppId": "105600",
+    "title": "Prince of Persia The Lost Crown",
+    "short": "Prince of Persia",
+    "steamAppId": "2751000",
+    "platform": "Steam"
+  },
+  {
+    "title": "Assassin's Creed Black Flag Resynced",
+    "short": "AC Black Flag",
+    "steamAppId": "3751950",
+    "image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3751950/9b046115b1663a4be2b252712328e4f6c162da68/header.jpg",
+    "platform": "Steam"
+  },
+  {
+    "title": "Assassin’s Creed Shadows",
+    "short": "AC Shadows",
+    "steamAppId": "3159330",
+    "platform": "Steam"
+  },
+  {
+    "title": "Assassin's Creed Mirage",
+    "short": "AC Mirage",
+    "steamAppId": "3035570",
+    "platform": "Steam"
+  },
+  {
+    "title": "Assassin's Creed Valhalla",
+    "short": "AC Valhalla",
+    "steamAppId": "2208920",
+    "platform": "Steam"
+  },
+  {
+    "title": "Assassin's Creed Odyssey",
+    "short": "AC Odyssey",
+    "steamAppId": "812140",
     "platform": "Steam"
   }
 ]

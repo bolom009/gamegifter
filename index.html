@@ -70,9 +70,12 @@
       <div class="dock">
         <div class="dock-row">
           <div class="steps" id="steps">
-            <div class="step" data-step="games"><i>1</i> Колесо игр</div>
+            <div class="step" data-step="games"><i>1</i> Колесо игр <button class="mode-chip" data-mode-for="games"></button></div>
             <span class="step-arrow">➜</span>
-            <div class="step" data-step="players"><i>2</i> Победитель</div>
+            <div class="step" data-step="players"><i>2</i> Победитель <button class="mode-chip" data-mode-for="players"></button></div>
+          </div>
+          <div class="steps" id="soloMode">
+            <div class="step active">Колесо зрителей <button class="mode-chip" data-mode-for="players"></button></div>
           </div>
           <label class="mini-range" title="Длительность одного раунда колеса игр">
             <span>🎮 Игры <b data-out="gameSpinDuration"></b></span>
@@ -153,8 +156,21 @@
 
         <fieldset>
           <legend>🎡 Колесо</legend>
-          <label class="field"><span>Раунд колеса игр: <b data-out="gameSpinDuration"></b><small>Каждый спин выбивает одну игру, пока не останется одна</small></span><input type="range" min="2" max="60" step="1" data-setting="gameSpinDuration"></label>
-          <label class="field"><span>Спин победителя: <b data-out="spinDuration"></b><small>Один спин по участникам за оставшуюся игру</small></span><input type="range" min="3" max="120" step="1" data-setting="spinDuration"></label>
+          <label class="field"><span>Этап 1 — колесо игр</span>
+            <select data-setting="gameMode">
+              <option value="elim">💥 На выбывание — игры выбывают по одной, последняя разыгрывается</option>
+              <option value="pick">🎯 Кто выпал — на какой игре остановилось, ту и разыгрываем</option>
+            </select>
+          </label>
+          <label class="field"><span>Этап 2 — колесо зрителей</span>
+            <select data-setting="playerMode">
+              <option value="pick">🎯 Кто выпал — один спин, где остановилось, тот и выиграл</option>
+              <option value="elim">💥 На выбывание — зрители выбывают по одному, последний выигрывает</option>
+            </select>
+          </label>
+          <label class="field"><span>Спин колеса игр: <b data-out="gameSpinDuration"></b></span><input type="range" min="2" max="60" step="1" data-setting="gameSpinDuration"></label>
+          <label class="field"><span>Спин победителя: <b data-out="spinDuration"></b><small>На выбывание — длительность финала, когда осталось двое</small></span><input type="range" min="3" max="120" step="1" data-setting="spinDuration"></label>
+          <label class="field"><span>Раунды выбывания зрителей: <b data-out="playerElimDuration"></b><small>Пока на колесе больше двух человек</small></span><input type="range" min="2" max="60" step="1" data-setting="playerElimDuration"></label>
           <label class="field"><span>Характер остановки</span>
             <select data-setting="easing">
               <option value="smooth">Плавное замедление</option>
@@ -162,7 +178,7 @@
               <option value="tease">Интрига — проскакивает и откатывается назад</option>
             </select>
           </label>
-          <label class="switch"><input type="checkbox" data-setting="autoContinue"><i></i><span>Колесо игр: крутить следующий раунд автоматически</span></label>
+          <label class="switch"><input type="checkbox" data-setting="autoContinue"><i></i><span>На выбывание: крутить следующий раунд автоматически</span></label>
           <label class="switch"><input type="checkbox" data-setting="skipEmptyGames"><i></i><span>Не ставить на колесо игры, которые никто не выбрал</span></label>
         </fieldset>
 
@@ -225,8 +241,9 @@
           <li><b>Объявите розыгрыш.</b> Кнопка «📋 Текст для чата» копирует готовое сообщение со списком игр — вставьте его в чат.</li>
           <li><b>Зрители регистрируются сами</b>, написав в чат <code class="jc">!join</code> (все игры) или <code class="jc">!join 1 3</code> (только игры №1 и №3). Передумал — <code class="lc">!leave</code>. Повторный !join меняет выбор.</li>
           <li><b>Закройте регистрацию</b> кнопкой «Регистрация открыта», когда наберётся народ.</li>
-          <li><b>Этап 1 — колесо игр.</b> Жмите КРУТИТЬ (или Пробел): каждый спин выбивает одну игру, пока не останется одна.</li>
-          <li><b>Этап 2 — победитель.</b> На колесе появляются зрители, которые хотели эту игру. Один спин — и победитель найден. «Засчитать» или «Перекрутить», если человек не отозвался.</li>
+          <li><b>Этап 1 — колесо игр.</b> Жмите КРУТИТЬ (или Пробел). По умолчанию каждый спин выбивает одну игру, пока не останется одна.</li>
+          <li><b>Этап 2 — победитель.</b> На колесе зрители, которые хотели эту игру. По умолчанию один спин — и победитель найден. «Засчитать» или «Перекрутить», если человек не отозвался.</li>
+          <li><b>Режим каждого колеса</b> переключается кнопкой на плашке этапа под колесом: 💥 на выбывание или 🎯 кто выпал, тот и выиграл.</li>
           <li>После победы колесо игр начинается заново с оставшимися играми. Длительность спинов, удача сабов, проверка присутствия — под колесом и в ⚙.</li>
         </ol>
         <p class="note">Всё хранится в вашем браузере: можно обновить страницу — участники и итоги не пропадут. Для захвата в OBS используйте «Захват окна» браузера.</p>

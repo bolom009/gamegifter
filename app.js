@@ -52,7 +52,10 @@ const DEFAULTS = {
   allowChoice: true,
   maxChoices: 0,
   excludeBroadcaster: true,
-  gameSpinDuration: 8,     // каждый раунд колеса игр
+  gameMode: 'elim',        // колесо игр: elim — выбивает по одной, pick — где остановилось, та и разыгрывается
+  playerMode: 'pick',      // колесо зрителей: pick — один спин, elim — выбывают по одному
+  gameSpinDuration: 8,     // каждый спин колеса игр
+  playerElimDuration: 6,   // раунды выбывания зрителей (финал из двух — со «спином победителя»)
   spinDuration: 30,        // спин победителя
   easing: 'smooth',        // smooth | dramatic | tease
   autoContinue: true,
@@ -73,8 +76,9 @@ const state = {
   participants: store.get('participants', {}), // login -> {login, name, color, sub, mod, vip, games: 'all' | [id], joinedAt}
   results: store.get('results', {}),           // gameId -> [{login, name, color, at}]
   regOpen: store.get('regOpen', true),
-  // Этап 1 «games»: колесо выбивает игры по одной. Этап 2 «players»: один спин — кто получит оставшуюся игру.
-  round: { phase: 'games', gameId: null, eliminated: [], rerolled: [] },
+  // Этап 1 «games»: колесо выбирает игру. Этап 2 «players»: колесо выбирает, кто её получит.
+  // eliminated — выбывшие игры, out — выбывшие зрители, rerolled — перекрученные победители.
+  round: { phase: 'games', gameId: null, eliminated: [], out: [], rerolled: [] },
   spinning: false,
   transitioning: false,
   paused: false,
@@ -96,6 +100,7 @@ function normGame(g, i) {
     title,
     steamAppId: appid,
     image: String(g.image || '').trim(),
+    short: String(g.short || '').trim(), // короткая подпись на колесе
     platform: String(g.platform || (appid ? 'Steam' : '')).trim(),
     count: Math.max(1, parseInt(g.count, 10) || 1),
   };
@@ -165,17 +170,20 @@ function gamePool() {
 }
 
 function playerPool() {
-  const out = new Set(state.round.rerolled);
+  const out = new Set([...state.round.out, ...state.round.rerolled]);
   return eligible().filter(p => !out.has(p.login));
 }
 
+// Режим колеса текущего этапа: 'elim' или 'pick'
+const modeOf = ph => (ph === 'games' ? S().gameMode : S().playerMode);
+
 function wheelEntries() {
-  if (phase() === 'games') return gamePool().map(g => ({ key: g.id, label: g.title, sub: false, ref: g }));
+  if (phase() === 'games') return gamePool().map(g => ({ key: g.id, label: g.short || g.title, sub: false, ref: g }));
   return playerPool().map(p => ({ key: p.login, label: p.name, color: p.color, sub: p.sub, ref: p }));
 }
 
 function resetRound() {
-  state.round = { phase: 'games', gameId: null, eliminated: [], rerolled: [] };
+  state.round = { phase: 'games', gameId: null, eliminated: [], out: [], rerolled: [] };
   state.paused = false;
 }
 
@@ -314,8 +322,10 @@ function buildSegments(entries) {
   }
   W.empty = false;
   // На колесе игр все равны, на колесе игроков сабам можно дать больше шансов
+  // (на выбывание — наоборот, сектор саба меньше: ему реже выпадает вылет)
   const players = phase() === 'players';
-  const ws = entries.map(e => (players ? weightOf(e.ref) : 1));
+  const inv = players && S().playerMode === 'elim';
+  const ws = entries.map(e => (players ? (inv ? 1 / weightOf(e.ref) : weightOf(e.ref)) : 1));
   const total = ws.reduce((a, b) => a + b, 0);
   const n = entries.length;
   let a = 0;
@@ -375,18 +385,25 @@ function drawWheelCache() {
 
   const showStar = S().subLuck > 1 && phase() === 'players';
   for (const s of W.segs) {
-    const fs = Math.min(r * 0.085, s.size * r * 0.55 * 0.8);
+    let fs = Math.min(r * 0.085, s.size * r * 0.55 * 0.8);
     if (fs < 7) continue;
+    const label = s.e ? (showStar && s.e.sub ? '★ ' : '') + s.e.label : '?';
+    const maxW = r * 0.66;
     x.save();
     x.rotate(s.start + s.size / 2);
     x.font = `800 ${fs}px Manrope, sans-serif`;
+    // Длинное название сначала ужимаем шрифтом (до 11px), и только потом обрезаем
+    const w = x.measureText(label).width;
+    if (w > maxW) {
+      fs = Math.max(fs * maxW / w, Math.min(fs, 11));
+      x.font = `800 ${fs}px Manrope, sans-serif`;
+    }
     x.textAlign = 'right';
     x.textBaseline = 'middle';
     x.fillStyle = s.text;
     x.shadowColor = s.text === '#fff' ? 'rgba(0,0,0,.45)' : 'rgba(255,255,255,.35)';
     x.shadowBlur = 4;
-    const label = s.e ? (showStar && s.e.sub ? '★ ' : '') + s.e.label : '?';
-    x.fillText(fitText(x, label, r * 0.66), r * 0.92, 0);
+    x.fillText(fitText(x, label, maxW), r * 0.92, 0);
     x.restore();
   }
 }
@@ -522,10 +539,19 @@ function animateTo(idx, ms, easing) {
       } else {
         setRot(from + (to - from) * ease(k));
       }
-      if (k < 1) requestAnimationFrame(frame);
-      else { setRot(mod(to, TAU)); resolve(); }
+      if (k < 1 && !finished) requestAnimationFrame(frame);
+      else finish();
+    };
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      setRot(mod(to, TAU));
+      resolve();
     };
     requestAnimationFrame(frame);
+    // Во фоновой вкладке кадры не идут — доводим спин по таймеру, чтобы розыгрыш не завис
+    setTimeout(finish, ms + 500);
   });
 }
 
@@ -543,8 +569,13 @@ async function spin() {
     w.classList.remove('shake'); void w.offsetWidth; w.classList.add('shake');
     return;
   }
-  if (games && entries.length === 1) { chooseGame(entries[0].ref); return; }
+  // Один остался — крутить нечего
+  if (entries.length === 1 && (games || S().playerMode === 'elim')) {
+    if (games) chooseGame(entries[0].ref); else announceWinner(entries[0].ref);
+    return;
+  }
 
+  const elim = modeOf(phase()) === 'elim';
   state.spinning = true;
   W.highlight = null;
   buildSegments(entries);
@@ -555,40 +586,48 @@ async function spin() {
   let acc = 0, idx = W.segs.length - 1;
   for (let i = 0; i < W.segs.length; i++) { acc += W.segs[i].prob; if (r < acc) { idx = i; break; } }
 
-  const dur = clamp(+(games ? S().gameSpinDuration : S().spinDuration) || 10, 1, 600);
+  // Раунды выбывания зрителей короче, финал из двух — с полной длительностью
+  let dur = games ? S().gameSpinDuration : S().spinDuration;
+  if (!games && elim && entries.length > 2) dur = S().playerElimDuration;
+  dur = clamp(+dur || 10, 1, 600);
   Sound.start();
   await animateTo(idx, dur * 1000, S().easing);
 
   const seg = W.segs[idx];
   setLiveName(seg.e.label, seg.e.color || seg.color);
-  W.highlight = { idx, kind: games ? 'out' : 'win', t0: performance.now() };
+  W.highlight = { idx, kind: elim ? 'out' : 'win', t0: performance.now() };
   state.spinning = false;
 
-  if (games) await eliminateGame(seg.e.ref);
+  if (elim) await eliminate(seg.e);
+  else if (games) { state.transitioning = true; renderAll(); await sleep(900); chooseGame(seg.e.ref); }
   else announceWinner(seg.e.ref);
 }
 
-async function eliminateGame(g) {
+// Выбывание на любом из колёс: игра или зритель
+async function eliminate(e) {
+  const games = phase() === 'games';
   // Пока идёт анимация выбывания, новый спин запускать нельзя
   state.transitioning = true;
   Sound.elim();
-  toast(`💥 ${g.title} выбывает!`, 'elim');
+  toast(`💥 ${e.label} выбывает!`, 'elim');
   renderAll();
   await sleep(1400);
-  state.round.eliminated.push(g.id);
+  (games ? state.round.eliminated : state.round.out).push(e.key);
   W.highlight = null;
-  const left = gamePool();
+  const left = games ? gamePool() : playerPool();
   if (left.length === 1) {
     renderAll(true);
     await sleep(500);
-    chooseGame(left[0]);
+    if (games) chooseGame(left[0]);
+    else { state.transitioning = false; announceWinner(left[0]); }
     return;
   }
   state.transitioning = false;
   renderAll(true);
   if (S().autoContinue && !state.paused && left.length > 1) {
     await sleep(1300);
-    if (!state.spinning && !state.pending && !state.paused && phase() === 'games') spin();
+    const same = phase() === (games ? 'games' : 'players') && modeOf(phase()) === 'elim';
+    if (same && !state.spinning && !state.pending && !state.paused && !state.transitioning) spin();
   }
 }
 
@@ -606,7 +645,7 @@ async function chooseGame(g) {
   openModal('gameModal');
   await sleep(3200);
   closeModal('gameModal');
-  state.round = { phase: 'players', gameId: g.id, eliminated: state.round.eliminated, rerolled: [] };
+  state.round = { phase: 'players', gameId: g.id, eliminated: state.round.eliminated, out: [], rerolled: [] };
   state.transitioning = false;
   W.highlight = null;
   renderAll(true);
@@ -699,6 +738,8 @@ function rerollWinner() {
   if (!pd) return;
   closeWinner();
   state.round.rerolled.push(pd.p.login);
+  // На выбывание перекрученный был последним — начинаем выбывание заново без него
+  state.round.out = [];
   toast(`🔄 ${pd.p.name} исключён из этого розыгрыша`, 'warn');
   renderAll(true);
 }
@@ -935,17 +976,26 @@ function renderStage(rebuild) {
     ln.className = 'live-name idle';
     ln.style.color = '';
     const waiting = `Ждём участников — пишите ${S().joinCmd}${S().allowChoice && hasGames ? ' [номера игр]' : ''} в чат`;
+    const elim = modeOf(ph) === 'elim';
     if (ph === 'games') {
-      if (n) ln.textContent = `На колесе ${n} ${plural(n, 'игра', 'игры', 'игр')} — каждый спин выбивает одну`;
+      if (n) ln.textContent = `На колесе ${n} ${plural(n, 'игра', 'игры', 'игр')} — ${elim ? 'каждый спин выбивает одну' : 'на какой остановится, ту и разыграем'}`;
       else if (!state.games.some(x => !gameDone(x))) ln.textContent = 'Все игры разыграны 🎉';
       else if (!Object.keys(state.participants).length) ln.textContent = waiting;
       else ln.textContent = 'Никто не записался на оставшиеся игры';
     } else if (!n) ln.textContent = g ? 'Никто из участников не выбрал эту игру' : waiting;
-    else ln.textContent = `${n} ${plural(n, 'претендент', 'претендента', 'претендентов')}${g ? ' на ' + g.title : ''} — один спин решает всё`;
+    else ln.textContent = `${n} ${plural(n, 'претендент', 'претендента', 'претендентов')}${g ? ' на ' + g.title : ''} — ${elim ? 'выбывают по одному, последний забирает игру' : 'один спин решает всё'}`;
   }
 
   $('#steps').style.display = hasGames ? '' : 'none';
   $$('#steps [data-step]').forEach(s => s.classList.toggle('active', s.dataset.step === ph));
+  $$('#steps [data-mode-for]').forEach(b => {
+    const elim = modeOf(b.dataset.modeFor) === 'elim';
+    b.textContent = elim ? '💥 на выбывание' : '🎯 кто выпал';
+    b.title = elim ? 'Каждый спин убирает одного, последний — победитель. Нажмите, чтобы переключить' : 'Где остановилось — тот и выиграл. Нажмите, чтобы переключить';
+    b.disabled = state.spinning || state.transitioning || !!state.pending;
+  });
+  // Без игр есть только колесо зрителей — его режим показываем отдельно
+  $('#soloMode').style.display = hasGames ? 'none' : '';
 }
 
 function setLiveName(text, color) {
@@ -969,7 +1019,7 @@ function renderPeople() {
   const onWheel = new Set(phase() === 'players'
     ? playerPool().map(p => p.login)
     : gamePool().flatMap(g => eligible(g).map(p => p.login)));
-  const out = new Set(state.round.rerolled);
+  const out = new Set([...state.round.out, ...state.round.rerolled]);
   const winners = winnersSet();
   const list = $('#peopleList');
   list.replaceChildren();
@@ -1010,53 +1060,65 @@ function renderPeople() {
 
 function renderElimBar() {
   const bar = $('#elimBar');
-  const show = state.games.length > 0;
+  const ph = phase();
+  const hasGames = state.games.length > 0;
+  const elim = modeOf(ph) === 'elim';
+  const show = hasGames || elim;
   bar.classList.toggle('show', show);
   if (!show) return;
   const busy = state.spinning || state.transitioning || !!state.pending;
-  const restart = el('button', {
-    class: 'btn btn-mini', text: phase() === 'games' ? '↺ Заново' : '↺ Заново выбрать игру', disabled: busy,
-    onclick: () => { resetRound(); renderAll(true); },
-  });
+  const nameOf = l => (state.participants[l] || { name: l }).name;
 
-  if (phase() === 'players') {
+  // Что уже выбыло, сколько осталось и подсказка — для текущего колеса
+  const outKeys = ph === 'games' ? state.round.eliminated : state.round.out;
+  const alive = ph === 'games' ? gamePool().length : playerPool().length;
+  const outNames = ph === 'games'
+    ? outKeys.map(id => (state.games.find(g => g.id === id) || { title: id }).title)
+    : outKeys.map(nameOf);
+  const total = alive + outKeys.length;
+  const pct = total > 1 ? outKeys.length / (total - 1) * 100 : 0;
+  const hint = ph === 'games'
+    ? (elim ? 'каждый спин выбивает одну игру' : 'на какой игре остановится — ту и разыгрываем')
+    : (elim ? 'выбывают по одному, последний забирает игру' : 'один спин — и победитель получает игру');
+  const rer = ph === 'players' ? state.round.rerolled.map(nameOf) : [];
+
+  let head;
+  if (ph === 'games') head = el('div', { class: 'alive' }, 'Игр: ', el('b', { text: String(alive) }), total !== alive ? ` из ${total}` : '');
+  else {
     const g = selectedGame();
-    const rer = state.round.rerolled.map(l => (state.participants[l] || { name: l }).name);
-    bar.replaceChildren(
-      el('div', { class: 'elim-top' },
-        g ? el('div', { class: 'thumb' }, imgOrPh(gameImage(g), g.title)) : null,
-        el('div', { class: 'alive' }, el('b', { text: g ? g.title : '—' }),
-          g && g.count > 1 ? ` · ключ ${gameResults(g).length + 1}/${g.count}` : ''),
-        el('div', { class: 'out-list' }, rer.length
-          ? ['перекручены:', ...rer.map(n => el('span', { class: 'out-chip', text: n }))]
-          : el('span', { class: 'muted', text: 'один спин — и победитель получает игру' })),
-        restart));
-    return;
+    head = [
+      g ? el('div', { class: 'thumb' }, imgOrPh(gameImage(g), g.title)) : null,
+      el('div', { class: 'alive' }, el('b', { text: g ? g.title : 'Все участники' }),
+        g && g.count > 1 ? ` · ключ ${gameResults(g).length + 1}/${g.count}` : '',
+        elim ? ` · осталось ${alive}` : ''),
+    ];
   }
 
-  const alive = gamePool().length;
-  const outIds = state.round.eliminated;
-  const total = alive + outIds.length;
-  const pct = total > 1 ? outIds.length / (total - 1) * 100 : 0;
-  const outNames = outIds.map(id => (state.games.find(g => g.id === id) || { title: id }).title);
+  const chips = [
+    ...outNames.map(n => el('span', { class: 'out-chip', text: n })),
+    ...(rer.length ? ['перекручены:', ...rer.map(n => el('span', { class: 'out-chip', text: n }))] : []),
+  ];
+
   bar.replaceChildren(
-    el('div', { class: 'elim-progress' }, el('i', { style: `width:${clamp(pct, 0, 100)}%` })),
+    elim ? el('div', { class: 'elim-progress' }, el('i', { style: `width:${clamp(pct, 0, 100)}%` })) : null,
     el('div', { class: 'elim-top' },
-      el('div', { class: 'alive' }, 'Игр: ', el('b', { text: String(alive) }), total !== alive ? ` из ${total}` : ''),
-      el('div', { class: 'out-list' }, outNames.length
-        ? outNames.map(n => el('span', { class: 'out-chip', text: n }))
-        : el('span', { class: 'muted', text: 'каждый спин выбивает одну игру' })),
-      el('button', {
+      head,
+      el('div', { class: 'out-list' }, chips.length ? chips : el('span', { class: 'muted', text: hint })),
+      elim ? el('button', {
         class: 'btn btn-mini', text: state.paused || !S().autoContinue ? '▶ Авто: выкл' : '⏸ Авто: вкл',
         title: 'Автоматически крутить следующий раунд',
         onclick: () => {
           if (!S().autoContinue) { setSetting('autoContinue', true); state.paused = false; }
           else state.paused = !state.paused;
           renderAll();
-          if (!state.paused && outIds.length && !state.spinning && !state.transitioning && gamePool().length > 1) spin();
+          if (!state.paused && outKeys.length && !state.spinning && !state.transitioning && !state.pending && alive > 1) spin();
         },
-      }),
-      restart),
+      }) : null,
+      hasGames || outKeys.length || rer.length ? el('button', {
+        class: 'btn btn-mini', disabled: busy,
+        text: ph === 'games' || !hasGames ? '↺ Заново' : '↺ Заново выбрать игру',
+        onclick: () => { resetRound(); renderAll(true); },
+      }) : null),
   );
 }
 
@@ -1083,16 +1145,32 @@ function closeModal(id) { $('#' + id).classList.remove('open'); }
 const OUT_FMT = {
   spinDuration: v => `${v} с`,
   gameSpinDuration: v => `${v} с`,
+  playerElimDuration: v => `${v} с`,
   confirmSeconds: v => `${v} с`,
   subLuck: v => (+v === 1 ? 'как у всех' : `×${v}`),
   volume: v => `${Math.round(v * 100)}%`,
 };
 
 function setSetting(key, v) {
+  const prev = state.settings[key];
+  if (/Mode$/.test(key) && (state.spinning || state.transitioning || state.pending)) {
+    syncSettingsUI();
+    toast('Режим можно сменить, когда колесо остановится', 'warn');
+    return;
+  }
   state.settings[key] = v;
   store.set('settings', state.settings);
+  // Смена режима колеса сбрасывает прогресс выбывания на этом колесе
+  if (prev !== v && key === 'gameMode') state.round.eliminated = [];
+  if (prev !== v && key === 'playerMode') state.round.out = [];
   syncSettingsUI();
-  renderAll(['subsOnly', 'subLuck', 'excludeWinners', 'allowChoice', 'skipEmptyGames'].includes(key));
+  renderAll(['subsOnly', 'subLuck', 'excludeWinners', 'allowChoice', 'skipEmptyGames', 'gameMode', 'playerMode'].includes(key));
+}
+
+function toggleMode(ph) {
+  if (state.spinning || state.transitioning || state.pending) return;
+  const key = ph === 'games' ? 'gameMode' : 'playerMode';
+  setSetting(key, S()[key] === 'elim' ? 'pick' : 'elim');
 }
 
 function syncSettingsUI() {
@@ -1137,7 +1215,7 @@ function openGamesEditor() {
 function renderEditor() {
   const box = $('#gamesEditor');
   box.replaceChildren(el('div', { class: 'ge-row head' },
-    el('span', { text: '№' }), el('span', { text: 'Название' }), el('span', { text: 'Steam App ID' }),
+    el('span', { text: '№' }), el('span', { text: 'Название' }), el('span', { text: 'На колесе (коротко)' }), el('span', { text: 'Steam App ID' }),
     el('span', { text: 'Картинка (URL, необязательно)' }), el('span', { text: 'Платформа' }), el('span', { text: 'Ключей' }), el('span')));
   draft.forEach((g, i) => {
     const inp = (key, ph, type = 'text') => el('input', {
@@ -1152,7 +1230,7 @@ function renderEditor() {
     };
     box.append(el('div', { class: 'ge-row' },
       el('span', { class: 'ge-num', text: '#' + (i + 1) }),
-      inp('title', 'Название игры'), inp('steamAppId', 'напр. 1145350'),
+      inp('title', 'Название игры'), inp('short', 'необязательно'), inp('steamAppId', 'напр. 1145350'),
       inp('image', 'https://…/cover.jpg'), inp('platform', 'Steam'), inp('count', '1', 'number'),
       el('div', { class: 'ge-btns' },
         el('button', { title: 'Выше', text: '↑', onclick: () => move(-1) }),
@@ -1166,6 +1244,7 @@ function cleanDraft() {
   return draft.filter(g => String(g.title || '').trim()).map(g => {
     const o = { title: g.title.trim() };
     if (g.id && g.id !== o.title.toLowerCase()) o.id = g.id;
+    if (String(g.short || '').trim()) o.short = g.short.trim();
     if (String(g.steamAppId || '').trim()) o.steamAppId = String(g.steamAppId).trim();
     if (String(g.image || '').trim()) o.image = g.image.trim();
     if (String(g.platform || '').trim()) o.platform = g.platform.trim();
@@ -1253,6 +1332,7 @@ function initStars() {
 
 function bindUI() {
   $('#spinBtn').addEventListener('click', spin);
+  $$('[data-mode-for]').forEach(b => b.addEventListener('click', () => toggleMode(b.dataset.modeFor)));
   $('#connectBtn').addEventListener('click', () => {
     const dot = $('#twStatus');
     if (dot.classList.contains('online') || dot.classList.contains('connecting')) {
