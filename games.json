@@ -1,0 +1,23 @@
+[
+  {
+    "title": "Hades II",
+    "steamAppId": "1145350",
+    "platform": "Steam"
+  },
+  {
+    "title": "Hollow Knight",
+    "steamAppId": "367520",
+    "platform": "Steam",
+    "count": 2
+  },
+  {
+    "title": "Stardew Valley",
+    "steamAppId": "413150",
+    "platform": "Steam"
+  },
+  {
+    "title": "Terraria",
+    "steamAppId": "105600",
+    "platform": "Steam"
+  }
+]
