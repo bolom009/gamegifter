@@ -56,35 +56,35 @@
 
     <!-- КОЛЕСО -->
     <section class="stage" id="stage">
-      <div class="current-game" id="currentGame"></div>
-
-      <div class="wheel-wrap" id="wheelWrap">
-        <div class="wheel-glow"></div>
-        <canvas id="wheel"></canvas>
-        <div class="pointer" id="pointer"><div class="pointer-body"></div></div>
-        <button class="hub" id="spinBtn" title="Пробел — крутить"><span id="spinLabel">КРУТИТЬ</span></button>
+      <div class="wheel-area">
+        <div class="wheel-wrap" id="wheelWrap">
+          <div class="wheel-glow"></div>
+          <canvas id="wheel"></canvas>
+          <div class="pointer" id="pointer"><div class="pointer-body"></div></div>
+          <button class="hub" id="spinBtn" title="Пробел — крутить"><span id="spinLabel">КРУТИТЬ</span></button>
+        </div>
       </div>
 
       <div class="live-name" id="liveName">&nbsp;</div>
 
-      <div class="steps" id="steps">
-        <div class="step" data-step="games"><i>1</i> Колесо игр <small>выбывают по одной</small></div>
-        <span class="step-arrow">➜</span>
-        <div class="step" data-step="players"><i>2</i> Победитель <small>один спин по чату</small></div>
+      <div class="dock">
+        <div class="dock-row">
+          <div class="steps" id="steps">
+            <div class="step" data-step="games"><i>1</i> Колесо игр</div>
+            <span class="step-arrow">➜</span>
+            <div class="step" data-step="players"><i>2</i> Победитель</div>
+          </div>
+          <label class="mini-range" title="Длительность одного раунда колеса игр">
+            <span>🎮 Игры <b data-out="gameSpinDuration"></b></span>
+            <input type="range" min="2" max="60" step="1" data-setting="gameSpinDuration">
+          </label>
+          <label class="mini-range" title="Длительность спина победителя">
+            <span>🏆 Спин <b data-out="spinDuration"></b></span>
+            <input type="range" min="3" max="120" step="1" data-setting="spinDuration">
+          </label>
+        </div>
+        <div class="elim-bar" id="elimBar"></div>
       </div>
-
-      <div class="quick">
-        <label class="quick-range">
-          <span>🎮 Раунд колеса игр: <b data-out="gameSpinDuration"></b></span>
-          <input type="range" min="2" max="60" step="1" data-setting="gameSpinDuration">
-        </label>
-        <label class="quick-range">
-          <span>🏆 Спин победителя: <b data-out="spinDuration"></b></span>
-          <input type="range" min="3" max="120" step="1" data-setting="spinDuration">
-        </label>
-      </div>
-
-      <div class="elim-bar" id="elimBar"></div>
     </section>
 
     <!-- УЧАСТНИКИ -->

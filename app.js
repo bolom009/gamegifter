@@ -910,31 +910,10 @@ function renderGames() {
   });
 }
 
-let lastHeader = '';
 function renderStage(rebuild) {
   const ph = phase();
   const g = selectedGame();
   const hasGames = state.games.length > 0;
-  const cg = $('#currentGame');
-  const key = `${ph}|${g ? g.id + gameResults(g).length : ''}|${hasGames}`;
-  if (key !== lastHeader) {
-    lastHeader = key;
-    cg.replaceChildren();
-    if (ph === 'games') {
-      cg.append(el('div', { class: 'ph', text: '🎮' }), el('div', {},
-        el('div', { class: 'cg-label', text: 'ЭТАП 1 · КОЛЕСО ИГР' }),
-        el('div', { class: 'cg-title', text: 'Какую игру разыграем?' })));
-    } else if (g) {
-      const left = g.count - gameResults(g).length;
-      cg.append(imgOrPh(gameImage(g), g.title), el('div', {},
-        el('div', { class: 'cg-label', text: `ЭТАП 2 · КТО ПОЛУЧИТ${g.count > 1 ? ` · КЛЮЧЕЙ ОСТАЛОСЬ: ${left}` : ''}` }),
-        el('div', { class: 'cg-title', text: g.title })));
-    } else {
-      cg.append(el('div', { class: 'ph', text: '🎁' }), el('div', {},
-        el('div', { class: 'cg-label', text: 'РОЗЫГРЫШ' }),
-        el('div', { class: 'cg-title', text: 'Победитель среди всех участников' })));
-    }
-  }
 
   $('#stage').classList.toggle('spinning', state.spinning);
   const entries = wheelEntries();
@@ -1045,11 +1024,13 @@ function renderElimBar() {
     const rer = state.round.rerolled.map(l => (state.participants[l] || { name: l }).name);
     bar.replaceChildren(
       el('div', { class: 'elim-top' },
-        el('div', { class: 'alive' }, '🎮 Игра выбрана: ', el('b', { text: g ? g.title : '—' })),
-        el('span', { class: 'spacer' }), restart),
-      rer.length
-        ? el('div', { class: 'out-list', style: 'margin-top:10px' }, 'Перекручены: ', rer.map(n => el('span', { class: 'out-chip', text: n })))
-        : el('div', { class: 'note', style: 'margin:8px 0 0', text: 'Один спин — и победитель получает игру.' }));
+        g ? el('div', { class: 'thumb' }, imgOrPh(gameImage(g), g.title)) : null,
+        el('div', { class: 'alive' }, el('b', { text: g ? g.title : '—' }),
+          g && g.count > 1 ? ` · ключ ${gameResults(g).length + 1}/${g.count}` : ''),
+        el('div', { class: 'out-list' }, rer.length
+          ? ['перекручены:', ...rer.map(n => el('span', { class: 'out-chip', text: n }))]
+          : el('span', { class: 'muted', text: 'один спин — и победитель получает игру' })),
+        restart));
     return;
   }
 
@@ -1059,9 +1040,12 @@ function renderElimBar() {
   const pct = total > 1 ? outIds.length / (total - 1) * 100 : 0;
   const outNames = outIds.map(id => (state.games.find(g => g.id === id) || { title: id }).title);
   bar.replaceChildren(
+    el('div', { class: 'elim-progress' }, el('i', { style: `width:${clamp(pct, 0, 100)}%` })),
     el('div', { class: 'elim-top' },
-      el('div', { class: 'alive' }, 'Игр на колесе: ', el('b', { text: String(alive) }), total !== alive ? ` из ${total}` : ''),
-      el('span', { class: 'spacer' }),
+      el('div', { class: 'alive' }, 'Игр: ', el('b', { text: String(alive) }), total !== alive ? ` из ${total}` : ''),
+      el('div', { class: 'out-list' }, outNames.length
+        ? outNames.map(n => el('span', { class: 'out-chip', text: n }))
+        : el('span', { class: 'muted', text: 'каждый спин выбивает одну игру' })),
       el('button', {
         class: 'btn btn-mini', text: state.paused || !S().autoContinue ? '▶ Авто: выкл' : '⏸ Авто: вкл',
         title: 'Автоматически крутить следующий раунд',
@@ -1073,9 +1057,6 @@ function renderElimBar() {
         },
       }),
       restart),
-    el('div', { class: 'elim-progress' }, el('i', { style: `width:${clamp(pct, 0, 100)}%` })),
-    outNames.length ? el('div', { class: 'out-list' }, outNames.map(n => el('span', { class: 'out-chip', text: n })))
-      : el('div', { class: 'note', style: 'margin:0', text: 'Каждый спин выбивает одну игру. Последняя оставшаяся разыгрывается среди зрителей.' }),
   );
 }
 
