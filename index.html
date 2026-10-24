@@ -67,13 +67,19 @@
 
       <div class="live-name" id="liveName">&nbsp;</div>
 
+      <div class="steps" id="steps">
+        <div class="step" data-step="games"><i>1</i> Колесо игр <small>выбывают по одной</small></div>
+        <span class="step-arrow">➜</span>
+        <div class="step" data-step="players"><i>2</i> Победитель <small>один спин по чату</small></div>
+      </div>
+
       <div class="quick">
-        <div class="seg" role="group" aria-label="Режим">
-          <button data-mode="single">🎯 Один победитель</button>
-          <button data-mode="elimination">💥 На выбывание</button>
-        </div>
         <label class="quick-range">
-          <span>⏱ Раскрутка: <b data-out="spinDuration"></b></span>
+          <span>🎮 Раунд колеса игр: <b data-out="gameSpinDuration"></b></span>
+          <input type="range" min="2" max="60" step="1" data-setting="gameSpinDuration">
+        </label>
+        <label class="quick-range">
+          <span>🏆 Спин победителя: <b data-out="spinDuration"></b></span>
           <input type="range" min="3" max="120" step="1" data-setting="spinDuration">
         </label>
       </div>
@@ -124,6 +130,13 @@
     </div>
   </div>
 
+  <!-- ВЫБРАННАЯ ИГРА -->
+  <div class="modal" id="gameModal" data-sticky>
+    <div class="winner-card">
+      <div class="winner-inner chosen" id="chosenGame"></div>
+    </div>
+  </div>
+
   <!-- НАСТРОЙКИ -->
   <div class="modal" id="settingsModal">
     <div class="modal-card wide">
@@ -140,14 +153,8 @@
 
         <fieldset>
           <legend>🎡 Колесо</legend>
-          <label class="field"><span>Режим</span>
-            <select data-setting="mode">
-              <option value="single">🎯 Один победитель — где остановится, тот и выиграл</option>
-              <option value="elimination">💥 На выбывание — каждый спин убирает одного</option>
-            </select>
-          </label>
-          <label class="field"><span>Длительность раскрутки: <b data-out="spinDuration"></b></span><input type="range" min="3" max="120" step="1" data-setting="spinDuration"></label>
-          <label class="field"><span>Раунды выбывания: <b data-out="elimDuration"></b><small>Финальный спин (2 человека) идёт с основной длительностью</small></span><input type="range" min="2" max="60" step="1" data-setting="elimDuration"></label>
+          <label class="field"><span>Раунд колеса игр: <b data-out="gameSpinDuration"></b><small>Каждый спин выбивает одну игру, пока не останется одна</small></span><input type="range" min="2" max="60" step="1" data-setting="gameSpinDuration"></label>
+          <label class="field"><span>Спин победителя: <b data-out="spinDuration"></b><small>Один спин по участникам за оставшуюся игру</small></span><input type="range" min="3" max="120" step="1" data-setting="spinDuration"></label>
           <label class="field"><span>Характер остановки</span>
             <select data-setting="easing">
               <option value="smooth">Плавное замедление</option>
@@ -155,7 +162,8 @@
               <option value="tease">Интрига — проскакивает и откатывается назад</option>
             </select>
           </label>
-          <label class="switch"><input type="checkbox" data-setting="autoContinue"><i></i><span>Выбывание: крутить следующий раунд автоматически</span></label>
+          <label class="switch"><input type="checkbox" data-setting="autoContinue"><i></i><span>Колесо игр: крутить следующий раунд автоматически</span></label>
+          <label class="switch"><input type="checkbox" data-setting="skipEmptyGames"><i></i><span>Не ставить на колесо игры, которые никто не выбрал</span></label>
         </fieldset>
 
         <fieldset>
@@ -217,9 +225,9 @@
           <li><b>Объявите розыгрыш.</b> Кнопка «📋 Текст для чата» копирует готовое сообщение со списком игр — вставьте его в чат.</li>
           <li><b>Зрители регистрируются сами</b>, написав в чат <code class="jc">!join</code> (все игры) или <code class="jc">!join 1 3</code> (только игры №1 и №3). Передумал — <code class="lc">!leave</code>. Повторный !join меняет выбор.</li>
           <li><b>Закройте регистрацию</b> кнопкой «Регистрация открыта», когда наберётся народ.</li>
-          <li><b>Выберите игру</b> слева — на колесе останутся только те, кто её хочет.</li>
-          <li><b>Настройте режим</b> под колесом или в ⚙: один победитель или на выбывание, длительность, удача сабов, проверка присутствия…</li>
-          <li><b>Жмите КРУТИТЬ</b> (или Пробел). Когда победитель определён — «Засчитать» или «Перекрутить», если человек не отозвался.</li>
+          <li><b>Этап 1 — колесо игр.</b> Жмите КРУТИТЬ (или Пробел): каждый спин выбивает одну игру, пока не останется одна.</li>
+          <li><b>Этап 2 — победитель.</b> На колесе появляются зрители, которые хотели эту игру. Один спин — и победитель найден. «Засчитать» или «Перекрутить», если человек не отозвался.</li>
+          <li>После победы колесо игр начинается заново с оставшимися играми. Длительность спинов, удача сабов, проверка присутствия — под колесом и в ⚙.</li>
         </ol>
         <p class="note">Всё хранится в вашем браузере: можно обновить страницу — участники и итоги не пропадут. Для захвата в OBS используйте «Захват окна» браузера.</p>
       </div>

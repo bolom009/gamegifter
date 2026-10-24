@@ -52,11 +52,11 @@ const DEFAULTS = {
   allowChoice: true,
   maxChoices: 0,
   excludeBroadcaster: true,
-  mode: 'single',          // single | elimination
-  spinDuration: 30,
-  elimDuration: 6,
+  gameSpinDuration: 8,     // каждый раунд колеса игр
+  spinDuration: 30,        // спин победителя
   easing: 'smooth',        // smooth | dramatic | tease
   autoContinue: true,
+  skipEmptyGames: true,
   subsOnly: false,
   subLuck: 1,
   excludeWinners: true,
@@ -72,10 +72,11 @@ const state = {
   games: [],
   participants: store.get('participants', {}), // login -> {login, name, color, sub, mod, vip, games: 'all' | [id], joinedAt}
   results: store.get('results', {}),           // gameId -> [{login, name, color, at}]
-  selectedGameId: store.get('selectedGame', null),
   regOpen: store.get('regOpen', true),
-  round: { roster: null, eliminated: [], rerolled: [] },
+  // Этап 1 «games»: колесо выбивает игры по одной. Этап 2 «players»: один спин — кто получит оставшуюся игру.
+  round: { phase: 'games', gameId: null, eliminated: [], rerolled: [] },
   spinning: false,
+  transitioning: false,
   paused: false,
   pending: null, // победитель в модалке
 };
@@ -113,9 +114,6 @@ function setGames(list) {
     seen.add(g.id);
     return true;
   });
-  if (!state.games.find(g => g.id === state.selectedGameId)) {
-    state.selectedGameId = (state.games.find(g => !gameDone(g)) || state.games[0] || {}).id || null;
-  }
 }
 
 async function loadGames() {
@@ -132,7 +130,8 @@ async function loadGames() {
   }
 }
 
-const selectedGame = () => state.games.find(g => g.id === state.selectedGameId) || null;
+const phase = () => (state.games.length ? state.round.phase : 'players');
+const selectedGame = () => (phase() === 'players' && state.games.find(g => g.id === state.round.gameId)) || null;
 const gameResults = g => (g && state.results[g.id]) || [];
 const gameDone = g => !!g && gameResults(g).length >= g.count;
 const gameNumber = g => state.games.indexOf(g) + 1;
@@ -159,15 +158,25 @@ function eligible(g = selectedGame()) {
     .sort((a, b) => a.joinedAt - b.joinedAt);
 }
 
-function wheelEntries() {
-  const R = state.round;
-  const out = new Set([...R.eliminated, ...R.rerolled]);
-  if (R.roster) return R.roster.filter(l => !out.has(l)).map(l => state.participants[l]).filter(Boolean);
+// Игры, которые ещё крутятся на колесе игр
+function gamePool() {
+  const out = new Set(state.round.eliminated);
+  return state.games.filter(g => !gameDone(g) && !out.has(g.id) && (!S().skipEmptyGames || eligible(g).length));
+}
+
+function playerPool() {
+  const out = new Set(state.round.rerolled);
   return eligible().filter(p => !out.has(p.login));
 }
 
-function resetRound(keepRerolled = false) {
-  state.round = { roster: null, eliminated: [], rerolled: keepRerolled ? state.round.rerolled : [] };
+function wheelEntries() {
+  if (phase() === 'games') return gamePool().map(g => ({ key: g.id, label: g.title, sub: false, ref: g }));
+  return playerPool().map(p => ({ key: p.login, label: p.name, color: p.color, sub: p.sub, ref: p }));
+}
+
+function resetRound() {
+  state.round = { phase: 'games', gameId: null, eliminated: [], rerolled: [] };
+  state.paused = false;
 }
 
 const weightOf = p => (p.sub ? Math.max(1, +S().subLuck || 1) : 1);
@@ -298,23 +307,23 @@ function buildSegments(entries) {
   if (!entries.length) {
     W.empty = true;
     W.segs = Array.from({ length: 12 }, (_, i) => ({
-      p: null, start: i * TAU / 12, size: TAU / 12, prob: 1 / 12,
+      e: null, start: i * TAU / 12, size: TAU / 12, prob: 1 / 12,
       color: i % 2 ? '#2a1b4a' : '#1f1339', text: '#6c5a95',
     }));
     return;
   }
   W.empty = false;
-  // На выбывание у саба шанс вылететь меньше (сектор меньше)
-  const elim = S().mode === 'elimination';
-  const ws = entries.map(p => (elim ? 1 / weightOf(p) : weightOf(p)));
+  // На колесе игр все равны, на колесе игроков сабам можно дать больше шансов
+  const players = phase() === 'players';
+  const ws = entries.map(e => (players ? weightOf(e.ref) : 1));
   const total = ws.reduce((a, b) => a + b, 0);
   const n = entries.length;
   let a = 0;
-  W.segs = entries.map((p, i) => {
+  W.segs = entries.map((e, i) => {
     let ci = i % PALETTE.length;
     if (n > 1 && i === n - 1 && ci === 0) ci = 3; // последний не должен совпасть с первым
     const size = ws[i] / total * TAU;
-    const s = { p, start: a, size, prob: ws[i] / total, color: PALETTE[ci][0], text: PALETTE[ci][1] };
+    const s = { e, start: a, size, prob: ws[i] / total, color: PALETTE[ci][0], text: PALETTE[ci][1] };
     a += size;
     return s;
   });
@@ -364,7 +373,7 @@ function drawWheelCache() {
   x.arc(0, 0, r, 0, TAU);
   x.fill();
 
-  const showStar = S().subLuck > 1;
+  const showStar = S().subLuck > 1 && phase() === 'players';
   for (const s of W.segs) {
     const fs = Math.min(r * 0.085, s.size * r * 0.55 * 0.8);
     if (fs < 7) continue;
@@ -376,7 +385,7 @@ function drawWheelCache() {
     x.fillStyle = s.text;
     x.shadowColor = s.text === '#fff' ? 'rgba(0,0,0,.45)' : 'rgba(255,255,255,.35)';
     x.shadowBlur = 4;
-    const label = s.p ? (showStar && s.p.sub ? '★ ' : '') + s.p.name : '?';
+    const label = s.e ? (showStar && s.e.sub ? '★ ' : '') + s.e.label : '?';
     x.fillText(fitText(x, label, r * 0.66), r * 0.92, 0);
     x.restore();
   }
@@ -408,8 +417,8 @@ function setRot(rot) {
     if (state.spinning) {
       W.kick = 1;
       Sound.tick();
-      const p = W.segs[idx] && W.segs[idx].p;
-      if (p) setLiveName(p.name, p.color);
+      const s = W.segs[idx];
+      if (s && s.e) setLiveName(s.e.label, s.e.color || s.color);
     }
   }
 }
@@ -524,21 +533,17 @@ function animateTo(idx, ms, easing) {
    Розыгрыш
    ===================================================================== */
 async function spin() {
-  if (state.spinning || state.pending) return;
+  if (state.spinning || state.pending || state.transitioning) return;
   Sound.ensure();
-  const g = selectedGame();
-  if (g && gameDone(g)) { toast('Эта игра уже разыграна — выберите другую слева', 'warn'); return; }
-
-  const elim = S().mode === 'elimination';
+  const games = phase() === 'games';
   const entries = wheelEntries();
   if (!entries.length) {
-    toast('На колесе пока никого нет', 'warn');
+    toast(games ? 'Нет игр для розыгрыша' : 'На колесе пока никого нет', 'warn');
     const w = $('#wheelWrap');
     w.classList.remove('shake'); void w.offsetWidth; w.classList.add('shake');
     return;
   }
-  if (elim && entries.length === 1) { announceWinner(entries[0]); return; }
-  if (elim && !state.round.roster) state.round.roster = entries.map(p => p.login);
+  if (games && entries.length === 1) { chooseGame(entries[0].ref); return; }
 
   state.spinning = true;
   W.highlight = null;
@@ -550,37 +555,61 @@ async function spin() {
   let acc = 0, idx = W.segs.length - 1;
   for (let i = 0; i < W.segs.length; i++) { acc += W.segs[i].prob; if (r < acc) { idx = i; break; } }
 
-  const dur = clamp(+(elim && entries.length > 2 ? S().elimDuration : S().spinDuration) || 10, 1, 600);
+  const dur = clamp(+(games ? S().gameSpinDuration : S().spinDuration) || 10, 1, 600);
   Sound.start();
   await animateTo(idx, dur * 1000, S().easing);
 
-  const p = W.segs[idx].p;
-  setLiveName(p.name, p.color);
-  W.highlight = { idx, kind: elim ? 'out' : 'win', t0: performance.now() };
+  const seg = W.segs[idx];
+  setLiveName(seg.e.label, seg.e.color || seg.color);
+  W.highlight = { idx, kind: games ? 'out' : 'win', t0: performance.now() };
   state.spinning = false;
 
-  if (elim) await eliminate(p);
-  else announceWinner(p);
+  if (games) await eliminateGame(seg.e.ref);
+  else announceWinner(seg.e.ref);
 }
 
-async function eliminate(p) {
+async function eliminateGame(g) {
+  // Пока идёт анимация выбывания, новый спин запускать нельзя
+  state.transitioning = true;
   Sound.elim();
-  toast(`💥 ${p.name} выбывает!`, 'elim');
+  toast(`💥 ${g.title} выбывает!`, 'elim');
   renderAll();
   await sleep(1400);
-  state.round.eliminated.push(p.login);
+  state.round.eliminated.push(g.id);
   W.highlight = null;
-  renderAll(true);
-  const left = wheelEntries();
+  const left = gamePool();
   if (left.length === 1) {
+    renderAll(true);
     await sleep(500);
-    announceWinner(left[0]);
+    chooseGame(left[0]);
     return;
   }
+  state.transitioning = false;
+  renderAll(true);
   if (S().autoContinue && !state.paused && left.length > 1) {
     await sleep(1300);
-    if (!state.spinning && !state.pending && !state.paused && S().mode === 'elimination') spin();
+    if (!state.spinning && !state.pending && !state.paused && phase() === 'games') spin();
   }
+}
+
+// Осталась одна игра — показываем её и переходим к колесу участников
+async function chooseGame(g) {
+  state.transitioning = true;
+  Sound.win();
+  if (S().confetti) Confetti.burst(innerWidth / 2, innerHeight * 0.4, 120, TAU, 0, 13);
+  const box = $('#chosenGame');
+  box.replaceChildren(
+    el('div', { class: 'cg-cover' }, imgOrPh(gameImage(g), g.title)),
+    el('div', { class: 'winner-label', text: 'РАЗЫГРЫВАЕМ' }),
+    el('div', { class: 'chosen-title', text: g.title }),
+    el('div', { class: 'note', style: 'margin:8px 0 0', text: `${eligible(g).length} ${plural(eligible(g).length, 'претендент', 'претендента', 'претендентов')} · теперь крутим, кто её получит` }));
+  openModal('gameModal');
+  await sleep(3200);
+  closeModal('gameModal');
+  state.round = { phase: 'players', gameId: g.id, eliminated: state.round.eliminated, rerolled: [] };
+  state.transitioning = false;
+  W.highlight = null;
+  renderAll(true);
 }
 
 let confirmTimer = null;
@@ -588,7 +617,7 @@ let confirmTimer = null;
 function announceWinner(p) {
   const g = selectedGame();
   state.pending = { p, g, confirmed: false, deadline: Date.now() + S().confirmSeconds * 1000 };
-  const idx = W.segs.findIndex(s => s.p && s.p.login === p.login);
+  const idx = W.segs.findIndex(s => s.e && s.e.key === p.login);
   if (idx >= 0) W.highlight = { idx, kind: 'win', t0: performance.now() };
   setLiveName('🏆 ' + p.name, p.color);
   Sound.win();
@@ -662,19 +691,14 @@ function acceptWinner() {
   closeWinner();
   resetRound();
   toast(`🏆 ${p.name} получает ${g ? g.title : 'приз'}!`, 'ok');
-  if (g && gameDone(g)) {
-    const next = state.games.find(x => !gameDone(x));
-    if (next) selectGame(next.id);
-  }
   renderAll(true);
 }
 
 function rerollWinner() {
   const pd = state.pending;
   if (!pd) return;
-  const rer = [...state.round.rerolled, pd.p.login];
   closeWinner();
-  state.round = { roster: null, eliminated: [], rerolled: rer };
+  state.round.rerolled.push(pd.p.login);
   toast(`🔄 ${pd.p.name} исключён из этого розыгрыша`, 'warn');
   renderAll(true);
 }
@@ -684,15 +708,6 @@ function closeWinner() {
   state.pending = null;
   W.highlight = null;
   closeModal('winnerModal');
-}
-
-function selectGame(id) {
-  if (state.spinning || state.pending) return;
-  if (state.selectedGameId !== id) resetRound();
-  state.selectedGameId = id;
-  store.set('selectedGame', id);
-  W.highlight = null;
-  renderAll(true);
 }
 
 /* =====================================================================
@@ -867,14 +882,22 @@ function renderGames() {
     box.append(el('div', { class: 'empty', text: 'Список игр пуст. Нажмите ✏️, чтобы добавить игры — или крутите колесо без игр по всем участникам.' }));
     return;
   }
+  const cur = selectedGame();
+  const alive = new Set(gamePool().map(g => g.id));
+  const out = new Set(state.round.eliminated);
   state.games.forEach((g, i) => {
     const res = gameResults(g);
     const done = res.length >= g.count;
     const fans = people.filter(p => wantsGame(p, g)).length;
-    box.append(el('button', {
-      class: `game-card${g.id === state.selectedGameId ? ' selected' : ''}${done ? ' done' : ''}`,
+    let st = '';
+    if (done) st = ' done';
+    else if (cur === g) st = ' selected';
+    else if (out.has(g.id)) st = ' out';
+    else if (!alive.has(g.id)) st = ' nofans';
+    box.append(el('div', {
+      class: `game-card${st}`,
       style: `animation-delay:${i * 40}ms`,
-      onclick: () => selectGame(g.id),
+      title: st === ' nofans' ? 'Никто не выбрал эту игру — её нет на колесе' : null,
     },
       el('div', { class: 'game-img' }, imgOrPh(gameImage(g), g.title)),
       el('div', { class: 'game-num', text: '#' + (i + 1) }),
@@ -887,20 +910,30 @@ function renderGames() {
   });
 }
 
-let lastGameShown = undefined;
+let lastHeader = '';
 function renderStage(rebuild) {
+  const ph = phase();
   const g = selectedGame();
+  const hasGames = state.games.length > 0;
   const cg = $('#currentGame');
-  if (lastGameShown !== (g && g.id) || rebuild) {
-    lastGameShown = g && g.id;
+  const key = `${ph}|${g ? g.id + gameResults(g).length : ''}|${hasGames}`;
+  if (key !== lastHeader) {
+    lastHeader = key;
     cg.replaceChildren();
-    if (g) {
+    if (ph === 'games') {
+      cg.append(el('div', { class: 'ph', text: '🎮' }), el('div', {},
+        el('div', { class: 'cg-label', text: 'ЭТАП 1 · КОЛЕСО ИГР' }),
+        el('div', { class: 'cg-title', text: 'Какую игру разыграем?' })));
+    } else if (g) {
       const left = g.count - gameResults(g).length;
       cg.append(imgOrPh(gameImage(g), g.title), el('div', {},
-        el('div', { class: 'cg-label', text: gameDone(g) ? 'РАЗЫГРАНО' : `РАЗЫГРЫВАЕМ · #${gameNumber(g)}${g.count > 1 ? ` · ОСТАЛОСЬ КЛЮЧЕЙ: ${left}` : ''}` }),
+        el('div', { class: 'cg-label', text: `ЭТАП 2 · КТО ПОЛУЧИТ${g.count > 1 ? ` · КЛЮЧЕЙ ОСТАЛОСЬ: ${left}` : ''}` }),
         el('div', { class: 'cg-title', text: g.title })));
-      cg.style.display = '';
-    } else cg.style.display = 'none';
+    } else {
+      cg.append(el('div', { class: 'ph', text: '🎁' }), el('div', {},
+        el('div', { class: 'cg-label', text: 'РОЗЫГРЫШ' }),
+        el('div', { class: 'cg-title', text: 'Победитель среди всех участников' })));
+    }
   }
 
   $('#stage').classList.toggle('spinning', state.spinning);
@@ -914,23 +947,26 @@ function renderStage(rebuild) {
   }
 
   const btn = $('#spinBtn');
-  btn.disabled = state.spinning || !entries.length || (g && gameDone(g));
-  $('#spinLabel').textContent = state.spinning ? '•••' : (g && gameDone(g)) ? 'ГОТОВО' : 'КРУТИТЬ';
+  btn.disabled = state.spinning || state.transitioning || !entries.length;
+  $('#spinLabel').textContent = state.spinning ? '•••' : 'КРУТИТЬ';
 
-  if (!state.spinning && !W.highlight) {
+  if (!state.spinning && !state.transitioning && !W.highlight) {
     const n = entries.length;
     const ln = $('#liveName');
     ln.className = 'live-name idle';
     ln.style.color = '';
-    if (g && gameDone(g)) ln.textContent = 'Игра разыграна — выберите следующую слева';
-    else if (!n) ln.textContent = `Ждём участников — пишите ${S().joinCmd}${S().allowChoice && state.games.length ? ' [номера игр]' : ''} в чат`;
-    else ln.textContent = `На колесе ${n} ${plural(n, 'участник', 'участника', 'участников')}`;
+    const waiting = `Ждём участников — пишите ${S().joinCmd}${S().allowChoice && hasGames ? ' [номера игр]' : ''} в чат`;
+    if (ph === 'games') {
+      if (n) ln.textContent = `На колесе ${n} ${plural(n, 'игра', 'игры', 'игр')} — каждый спин выбивает одну`;
+      else if (!state.games.some(x => !gameDone(x))) ln.textContent = 'Все игры разыграны 🎉';
+      else if (!Object.keys(state.participants).length) ln.textContent = waiting;
+      else ln.textContent = 'Никто не записался на оставшиеся игры';
+    } else if (!n) ln.textContent = g ? 'Никто из участников не выбрал эту игру' : waiting;
+    else ln.textContent = `${n} ${plural(n, 'претендент', 'претендента', 'претендентов')}${g ? ' на ' + g.title : ''} — один спин решает всё`;
   }
 
-  $$('.seg [data-mode]').forEach(b => {
-    b.classList.toggle('active', b.dataset.mode === S().mode);
-    b.disabled = state.spinning;
-  });
+  $('#steps').style.display = hasGames ? '' : 'none';
+  $$('#steps [data-step]').forEach(s => s.classList.toggle('active', s.dataset.step === ph));
 }
 
 function setLiveName(text, color) {
@@ -950,8 +986,11 @@ function renderPeople() {
   const all = Object.values(state.participants).sort((a, b) => b.joinedAt - a.joinedAt);
   $('#pCount').textContent = all.length;
   const q = $('#peopleSearch').value.trim().toLowerCase();
-  const onWheel = new Set(wheelEntries().map(p => p.login));
-  const out = new Set(state.round.eliminated);
+  // На этапе игр «в игре» все, кто хочет хоть одну из оставшихся игр
+  const onWheel = new Set(phase() === 'players'
+    ? playerPool().map(p => p.login)
+    : gamePool().flatMap(g => eligible(g).map(p => p.login)));
+  const out = new Set(state.round.rerolled);
   const winners = winnersSet();
   const list = $('#peopleList');
   list.replaceChildren();
@@ -962,7 +1001,7 @@ function renderPeople() {
   for (const p of shown.slice(0, 500)) {
     const row = el('div', {
       class: `person${p.isNew ? ' new' : ''}${onWheel.has(p.login) ? '' : ' dim'}${out.has(p.login) ? ' out' : ''}`,
-      title: onWheel.has(p.login) ? '' : 'Сейчас не на колесе (не выбрал эту игру, уже выиграл или выбыл)',
+      title: onWheel.has(p.login) ? null : 'Сейчас не участвует (не выбрал эту игру, уже выиграл или перекручен)',
     },
       el('div', { class: 'avatar', style: `--c:${p.color}`, text: (p.name[0] || '?').toUpperCase() }),
       el('div', { class: 'p-main' },
@@ -992,16 +1031,36 @@ function renderPeople() {
 
 function renderElimBar() {
   const bar = $('#elimBar');
-  const elim = S().mode === 'elimination';
-  bar.classList.toggle('show', elim);
-  if (!elim) return;
-  const alive = wheelEntries().length;
-  const total = state.round.roster ? state.round.roster.length : alive;
-  const pct = total ? (total - alive) / Math.max(1, total - 1) * 100 : 0;
-  const outNames = state.round.eliminated.map(l => (state.participants[l] || { name: l }).name);
+  const show = state.games.length > 0;
+  bar.classList.toggle('show', show);
+  if (!show) return;
+  const busy = state.spinning || state.transitioning || !!state.pending;
+  const restart = el('button', {
+    class: 'btn btn-mini', text: phase() === 'games' ? '↺ Заново' : '↺ Заново выбрать игру', disabled: busy,
+    onclick: () => { resetRound(); renderAll(true); },
+  });
+
+  if (phase() === 'players') {
+    const g = selectedGame();
+    const rer = state.round.rerolled.map(l => (state.participants[l] || { name: l }).name);
+    bar.replaceChildren(
+      el('div', { class: 'elim-top' },
+        el('div', { class: 'alive' }, '🎮 Игра выбрана: ', el('b', { text: g ? g.title : '—' })),
+        el('span', { class: 'spacer' }), restart),
+      rer.length
+        ? el('div', { class: 'out-list', style: 'margin-top:10px' }, 'Перекручены: ', rer.map(n => el('span', { class: 'out-chip', text: n })))
+        : el('div', { class: 'note', style: 'margin:8px 0 0', text: 'Один спин — и победитель получает игру.' }));
+    return;
+  }
+
+  const alive = gamePool().length;
+  const outIds = state.round.eliminated;
+  const total = alive + outIds.length;
+  const pct = total > 1 ? outIds.length / (total - 1) * 100 : 0;
+  const outNames = outIds.map(id => (state.games.find(g => g.id === id) || { title: id }).title);
   bar.replaceChildren(
     el('div', { class: 'elim-top' },
-      el('div', { class: 'alive' }, 'В игре: ', el('b', { text: String(alive) }), total !== alive ? ` из ${total}` : ''),
+      el('div', { class: 'alive' }, 'Игр на колесе: ', el('b', { text: String(alive) }), total !== alive ? ` из ${total}` : ''),
       el('span', { class: 'spacer' }),
       el('button', {
         class: 'btn btn-mini', text: state.paused || !S().autoContinue ? '▶ Авто: выкл' : '⏸ Авто: вкл',
@@ -1010,13 +1069,13 @@ function renderElimBar() {
           if (!S().autoContinue) { setSetting('autoContinue', true); state.paused = false; }
           else state.paused = !state.paused;
           renderAll();
-          if (!state.paused && state.round.roster && !state.spinning && !state.pending && wheelEntries().length > 1) spin();
+          if (!state.paused && outIds.length && !state.spinning && !state.transitioning && gamePool().length > 1) spin();
         },
       }),
-      el('button', { class: 'btn btn-mini', text: '↺ Заново', disabled: state.spinning, onclick: () => { resetRound(); renderAll(true); } })),
+      restart),
     el('div', { class: 'elim-progress' }, el('i', { style: `width:${clamp(pct, 0, 100)}%` })),
     outNames.length ? el('div', { class: 'out-list' }, outNames.map(n => el('span', { class: 'out-chip', text: n })))
-      : el('div', { class: 'note', style: 'margin:0', text: 'Каждый спин убирает одного участника. Последний оставшийся — победитель.' }),
+      : el('div', { class: 'note', style: 'margin:0', text: 'Каждый спин выбивает одну игру. Последняя оставшаяся разыгрывается среди зрителей.' }),
   );
 }
 
@@ -1042,20 +1101,17 @@ function closeModal(id) { $('#' + id).classList.remove('open'); }
    ===================================================================== */
 const OUT_FMT = {
   spinDuration: v => `${v} с`,
-  elimDuration: v => `${v} с`,
+  gameSpinDuration: v => `${v} с`,
   confirmSeconds: v => `${v} с`,
   subLuck: v => (+v === 1 ? 'как у всех' : `×${v}`),
   volume: v => `${Math.round(v * 100)}%`,
 };
 
 function setSetting(key, v) {
-  if (state.spinning && key === 'mode') return;
-  const prev = state.settings[key];
   state.settings[key] = v;
   store.set('settings', state.settings);
-  if (key === 'mode' && prev !== v) { resetRound(); state.paused = false; }
   syncSettingsUI();
-  renderAll(['mode', 'subsOnly', 'subLuck', 'excludeWinners', 'allowChoice'].includes(key));
+  renderAll(['subsOnly', 'subLuck', 'excludeWinners', 'allowChoice', 'skipEmptyGames'].includes(key));
 }
 
 function syncSettingsUI() {
@@ -1083,7 +1139,6 @@ function bindSettings() {
       setSetting(inp.dataset.setting, v);
     });
   });
-  $$('.seg [data-mode]').forEach(b => b.addEventListener('click', () => setSetting('mode', b.dataset.mode)));
   syncSettingsUI();
 }
 
@@ -1293,7 +1348,7 @@ function bindUI() {
   $('#resetRoundBtn2').addEventListener('click', () => { resetRound(); renderAll(true); toast('Раунд сброшен', 'ok'); });
   $('#resetAllBtn').addEventListener('click', () => {
     if (!confirm('Сбросить всё: участников, итоги, настройки и свой список игр?')) return;
-    ['participants', 'results', 'settings', 'games', 'selectedGame', 'regOpen'].forEach(store.del);
+    ['participants', 'results', 'settings', 'games', 'regOpen'].forEach(store.del);
     location.reload();
   });
 
