@@ -62,7 +62,7 @@ const DEFAULTS = {
   skipEmptyGames: true,
   subsOnly: false,
   subLuck: 1,
-  excludeWinners: true,
+  winnersCanRepeat: true, // победитель остаётся на колесе следующих игр
   confirmEnabled: false,
   confirmSeconds: 60,
   sound: true,
@@ -156,7 +156,7 @@ function wantsGame(p, g) {
    Кто сейчас на колесе
    ===================================================================== */
 function eligible(g = selectedGame()) {
-  const winners = S().excludeWinners ? winnersSet() : new Set();
+  const winners = S().winnersCanRepeat ? new Set() : winnersSet();
   return Object.values(state.participants)
     .filter(p => !(S().subsOnly && !p.sub))
     .filter(p => wantsGame(p, g))
@@ -1252,7 +1252,7 @@ function setSetting(key, v) {
   if (prev !== v && key === 'gameMode') state.round.eliminated = [];
   if (prev !== v && key === 'playerMode') state.round.out = [];
   syncSettingsUI();
-  renderAll(['subsOnly', 'subLuck', 'excludeWinners', 'allowChoice', 'skipEmptyGames', 'gameMode', 'playerMode'].includes(key));
+  renderAll(['subsOnly', 'subLuck', 'winnersCanRepeat', 'allowChoice', 'skipEmptyGames', 'gameMode', 'playerMode'].includes(key));
 }
 
 function toggleMode(ph) {

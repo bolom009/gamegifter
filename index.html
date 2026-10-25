@@ -145,69 +145,86 @@
     <div class="modal-card wide">
       <div class="modal-head"><h3>⚙ Настройки розыгрыша</h3><button class="close" data-close>✕</button></div>
       <div class="modal-body settings-grid">
-        <fieldset>
-          <legend>💬 Регистрация через чат</legend>
-          <label class="field"><span>Команда участия</span><input type="text" data-setting="joinCmd"></label>
-          <label class="field"><span>Команда выхода</span><input type="text" data-setting="leaveCmd"></label>
-          <label class="switch"><input type="checkbox" data-setting="allowChoice"><i></i><span>Зрители выбирают игры номерами<small>«!join 1 3» — только игры 1 и 3. Без номеров — все игры.</small></span></label>
-          <label class="field"><span>Макс. игр на человека <small>(0 — без лимита)</small></span><input type="number" min="0" max="99" data-setting="maxChoices"></label>
-          <label class="switch"><input type="checkbox" data-setting="excludeBroadcaster"><i></i><span>Не пускать самого стримера</span></label>
-        </fieldset>
+        <div class="settings-col">
+          <fieldset>
+            <legend>💬 Регистрация через чат</legend>
+            <div class="field-row">
+              <label class="field"><span>Команда участия</span><input type="text" data-setting="joinCmd"></label>
+              <label class="field"><span>Команда выхода</span><input type="text" data-setting="leaveCmd"></label>
+            </div>
+            <label class="switch"><input type="checkbox" data-setting="allowChoice"><i></i><span>Зрители выбирают игры номерами<small>«!join 1 3» — только игры 1 и 3, без номеров — все</small></span></label>
+            <label class="field inline"><span>Макс. игр на человека <small>0 — без лимита</small></span><input type="number" min="0" max="99" data-setting="maxChoices"></label>
+            <label class="switch"><input type="checkbox" data-setting="excludeBroadcaster"><i></i><span>Не пускать самого стримера</span></label>
+          </fieldset>
 
-        <fieldset>
-          <legend>🎡 Колесо</legend>
-          <label class="field"><span>Этап 1 — колесо игр</span>
-            <select data-setting="gameMode">
-              <option value="elim">💥 На выбывание — игры выбывают по одной, последняя разыгрывается</option>
-              <option value="pick">🎯 Кто выпал — на какой игре остановилось, ту и разыгрываем</option>
-            </select>
-          </label>
-          <label class="field"><span>Этап 2 — колесо зрителей</span>
-            <select data-setting="playerMode">
-              <option value="pick">🎯 Кто выпал — один спин, где остановилось, тот и выиграл</option>
-              <option value="elim">💥 На выбывание — зрители выбывают по одному, последний выигрывает</option>
-            </select>
-          </label>
-          <label class="field"><span>Спин колеса игр: <b data-out="gameSpinDuration"></b></span><input type="range" min="2" max="60" step="1" data-setting="gameSpinDuration"></label>
-          <label class="field"><span>Спин победителя: <b data-out="spinDuration"></b><small>На выбывание — длительность финала, когда осталось двое</small></span><input type="range" min="3" max="120" step="1" data-setting="spinDuration"></label>
-          <label class="field"><span>Раунды выбывания зрителей: <b data-out="playerElimDuration"></b><small>Пока на колесе больше двух человек</small></span><input type="range" min="2" max="60" step="1" data-setting="playerElimDuration"></label>
-          <label class="field"><span>Характер остановки</span>
-            <select data-setting="easing">
-              <option value="smooth">Плавное замедление</option>
-              <option value="dramatic">Драматичное — долго ползёт в конце</option>
-              <option value="tease">Интрига — проскакивает и откатывается назад</option>
-            </select>
-          </label>
-          <label class="switch"><input type="checkbox" data-setting="autoContinue"><i></i><span>На выбывание: крутить следующий раунд автоматически</span></label>
-          <label class="switch"><input type="checkbox" data-setting="skipEmptyGames"><i></i><span>Не ставить на колесо игры, которые никто не выбрал</span></label>
-        </fieldset>
+          <fieldset>
+            <legend>🏆 Победитель</legend>
+            <label class="switch"><input type="checkbox" data-setting="confirmEnabled"><i></i><span>Проверка присутствия<small>Победитель должен написать в чат, пока идёт таймер</small></span></label>
+            <label class="field"><span>Время на ответ: <b data-out="confirmSeconds"></b></span><input type="range" min="10" max="300" step="5" data-setting="confirmSeconds"></label>
+          </fieldset>
+        </div>
 
-        <fieldset>
-          <legend>⚖️ Шансы и правила</legend>
-          <label class="switch"><input type="checkbox" data-setting="subsOnly"><i></i><span>Только подписчики канала</span></label>
-          <label class="field"><span>Удача сабов: <b data-out="subLuck"></b><small>×2 — у саба в 2 раза больше шанс (сектор больше)</small></span><input type="range" min="1" max="5" step="0.5" data-setting="subLuck"></label>
-          <label class="switch"><input type="checkbox" data-setting="excludeWinners"><i></i><span>Победитель не участвует в следующих играх</span></label>
-        </fieldset>
+        <div class="settings-col">
+          <fieldset>
+            <legend>🎡 Режимы колёс</legend>
+            <label class="field"><span>Этап 1 — колесо игр</span>
+              <select data-setting="gameMode">
+                <option value="elim">💥 На выбывание</option>
+                <option value="pick">🎯 Кто выпал</option>
+              </select>
+            </label>
+            <label class="field"><span>Этап 2 — колесо зрителей</span>
+              <select data-setting="playerMode">
+                <option value="pick">🎯 Кто выпал</option>
+                <option value="elim">💥 На выбывание</option>
+              </select>
+            </label>
+            <p class="hint">💥 — каждый спин убирает одного, последний побеждает.<br>🎯 — где колесо остановилось, тот и выиграл.</p>
+            <label class="field"><span>Характер остановки</span>
+              <select data-setting="easing">
+                <option value="smooth">Плавное замедление</option>
+                <option value="dramatic">Драматичное — долго ползёт</option>
+                <option value="tease">Интрига — проскакивает и откатывается</option>
+              </select>
+            </label>
+            <label class="switch"><input type="checkbox" data-setting="autoContinue"><i></i><span>На выбывание: следующий раунд сам</span></label>
+            <label class="switch"><input type="checkbox" data-setting="skipEmptyGames"><i></i><span>Без игр, которые никто не выбрал</span></label>
+          </fieldset>
 
-        <fieldset>
-          <legend>🏆 Победитель</legend>
-          <label class="switch"><input type="checkbox" data-setting="confirmEnabled"><i></i><span>Проверка присутствия<small>Победитель должен написать в чат, пока идёт таймер</small></span></label>
-          <label class="field"><span>Время на ответ: <b data-out="confirmSeconds"></b></span><input type="range" min="10" max="300" step="5" data-setting="confirmSeconds"></label>
-        </fieldset>
+          <fieldset class="danger">
+            <legend>🧹 Сбросить</legend>
+            <div class="btn-row">
+              <button class="btn btn-ghost" id="resetResultsBtn" title="Забыть всех победителей — игры снова можно разыгрывать">Итоги</button>
+              <button class="btn btn-ghost" id="resetRoundBtn2" title="Начать текущий розыгрыш заново с колеса игр">Раунд</button>
+              <button class="btn btn-danger" id="resetAllBtn" title="Участники, итоги, настройки и свой список игр">Всё</button>
+            </div>
+          </fieldset>
+        </div>
 
-        <fieldset>
-          <legend>✨ Эффекты</legend>
-          <label class="switch"><input type="checkbox" data-setting="sound"><i></i><span>Звуки</span></label>
-          <label class="field"><span>Громкость: <b data-out="volume"></b></span><input type="range" min="0" max="1" step="0.05" data-setting="volume"></label>
-          <label class="switch"><input type="checkbox" data-setting="confetti"><i></i><span>Конфетти</span></label>
-        </fieldset>
+        <div class="settings-col">
+          <fieldset>
+            <legend>⏱ Длительность</legend>
+            <label class="field"><span>Спин колеса игр: <b data-out="gameSpinDuration"></b></span><input type="range" min="2" max="60" step="1" data-setting="gameSpinDuration"></label>
+            <label class="field"><span>Спин победителя: <b data-out="spinDuration"></b><small>на выбывание — финал, когда осталось двое</small></span><input type="range" min="3" max="120" step="1" data-setting="spinDuration"></label>
+            <label class="field"><span>Раунды выбывания зрителей: <b data-out="playerElimDuration"></b></span><input type="range" min="2" max="60" step="1" data-setting="playerElimDuration"></label>
+          </fieldset>
 
-        <fieldset class="danger">
-          <legend>🧹 Сброс</legend>
-          <button class="btn btn-ghost" id="resetResultsBtn">Сбросить итоги (победителей)</button>
-          <button class="btn btn-ghost" id="resetRoundBtn2">Сбросить текущий раунд</button>
-          <button class="btn btn-danger" id="resetAllBtn">Сбросить всё</button>
-        </fieldset>
+          <fieldset>
+            <legend>⚖️ Шансы и правила</legend>
+            <label class="switch"><input type="checkbox" data-setting="winnersCanRepeat"><i></i><span>Победитель может участвовать снова<small>Выигравший остаётся на колесе следующих игр</small></span></label>
+            <label class="switch"><input type="checkbox" data-setting="subsOnly"><i></i><span>Только подписчики канала</span></label>
+            <label class="field"><span>Удача сабов: <b data-out="subLuck"></b><small>×2 — сектор саба в 2 раза больше</small></span><input type="range" min="1" max="5" step="0.5" data-setting="subLuck"></label>
+          </fieldset>
+
+          <fieldset>
+            <legend>✨ Эффекты</legend>
+            <div class="field-row">
+              <label class="switch"><input type="checkbox" data-setting="sound"><i></i><span>Звуки</span></label>
+              <label class="switch"><input type="checkbox" data-setting="confetti"><i></i><span>Конфетти</span></label>
+            </div>
+            <label class="field"><span>Громкость: <b data-out="volume"></b></span><input type="range" min="0" max="1" step="0.05" data-setting="volume"></label>
+          </fieldset>
+        </div>
       </div>
     </div>
   </div>
