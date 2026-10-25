@@ -100,6 +100,7 @@ git push -u origin main
 
 ```bash
 python -m http.server 8765
+npx serve -l 8765
 ```
 
 и откройте <http://localhost:8765>. (Открыть `index.html` двойным кликом не выйдет — браузер не даст загрузить `games.json` с диска.)
