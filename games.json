@@ -3,48 +3,55 @@
     "title": "Anno 117: Pax Romana",
     "short": "Anno 117",
     "steamAppId": "3274580",
-    "platform": "Steam"
+    "image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3274580/88dbcce1c7630e2d4334fa25e835968e57e0ebfe/header.jpg",
+    "platform": "Ubisoft Connect"
   },
   {
     "title": "Far Cry 6",
     "steamAppId": "2369390",
-    "platform": "Steam"
+    "image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2369390/64af0c6b70ef233bbdff1e5ffe0e397481efb3c9/header.jpg",
+    "platform": "Ubisoft Connect"
   },
   {
     "title": "Prince of Persia The Lost Crown",
     "short": "Prince of Persia",
     "steamAppId": "2751000",
-    "platform": "Steam"
+    "image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2751000/header.jpg",
+    "platform": "Ubisoft Connect"
   },
   {
     "title": "Assassin's Creed Black Flag Resynced",
     "short": "AC Black Flag",
     "steamAppId": "3751950",
     "image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3751950/9b046115b1663a4be2b252712328e4f6c162da68/header.jpg",
-    "platform": "Steam"
+    "platform": "Ubisoft Connect"
   },
   {
     "title": "Assassin’s Creed Shadows",
     "short": "AC Shadows",
     "steamAppId": "3159330",
-    "platform": "Steam"
+    "image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3159330/header.jpg",
+    "platform": "Ubisoft Connect"
   },
   {
     "title": "Assassin's Creed Mirage",
     "short": "AC Mirage",
     "steamAppId": "3035570",
-    "platform": "Steam"
+    "image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3035570/header.jpg",
+    "platform": "Ubisoft Connect"
   },
   {
     "title": "Assassin's Creed Valhalla",
     "short": "AC Valhalla",
     "steamAppId": "2208920",
-    "platform": "Steam"
+    "image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2208920/header.jpg",
+    "platform": "Ubisoft Connect"
   },
   {
     "title": "Assassin's Creed Odyssey",
     "short": "AC Odyssey",
     "steamAppId": "812140",
-    "platform": "Steam"
+    "image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/812140/header.jpg",
+    "platform": "Ubisoft Connect"
   }
 ]
