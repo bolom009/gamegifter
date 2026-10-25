@@ -195,16 +195,55 @@ const weightOf = p => (p.sub ? Math.max(1, +S().subLuck || 1) : 1);
    ===================================================================== */
 const Sound = {
   ctx: null,
+  out: null,   // общий выход: мягкий срез верхов + компрессор, чтобы ничего не било по ушам
+  echo: null,  // посыл в лёгкое эхо (задержка с затуханием)
+  noise: null, // буфер шума для щелчков и «вжуха»
   lastTick: 0,
   ensure() {
     if (!this.ctx) {
       const AC = window.AudioContext || window.webkitAudioContext;
-      if (AC) this.ctx = new AC();
+      if (AC) { this.ctx = new AC(); this.build(); }
     }
     if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
     return this.ctx;
   },
-  tone(freq, dur, type = 'triangle', vol = 0.2, when = 0, slideTo = 0) {
+  build() {
+    const c = this.ctx;
+    const comp = c.createDynamicsCompressor();
+    comp.threshold.value = -22;
+    comp.knee.value = 14;
+    comp.ratio.value = 4;
+    comp.attack.value = 0.003;
+    comp.release.value = 0.25;
+    const lp = c.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = 6500;
+    this.out = c.createGain();
+    this.out.connect(lp).connect(comp).connect(c.destination);
+
+    this.echo = c.createGain();
+    const delay = c.createDelay(1);
+    delay.delayTime.value = 0.17;
+    const damp = c.createBiquadFilter();
+    damp.type = 'lowpass';
+    damp.frequency.value = 2600;
+    const fb = c.createGain();
+    fb.gain.value = 0.33;
+    this.echo.connect(delay).connect(damp).connect(fb).connect(delay);
+    damp.connect(this.out);
+
+    const len = c.sampleRate;
+    this.noise = c.createBuffer(1, len, c.sampleRate);
+    const ch = this.noise.getChannelData(0);
+    for (let i = 0; i < len; i++) ch[i] = Math.random() * 2 - 1;
+  },
+  env(g, t, vol, attack, dur) {
+    const v = Math.max(0.0002, vol * S().volume);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(v, t + attack);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  },
+  tone(freq, dur, { type = 'sine', vol = 0.2, when = 0, slideTo = 0, attack = 0.01, wet = 0 } = {}) {
     const c = this.ctx;
     if (!c || !S().sound) return;
     const t = c.currentTime + when;
@@ -213,27 +252,61 @@ const Sound = {
     o.type = type;
     o.frequency.setValueAtTime(freq, t);
     if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
-    const v = Math.max(0.0002, vol * S().volume);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(v, t + 0.012);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g).connect(c.destination);
+    this.env(g, t, vol, attack, dur);
+    o.connect(g).connect(this.out);
+    if (wet) { const s = c.createGain(); s.gain.value = wet; g.connect(s).connect(this.echo); }
     o.start(t);
     o.stop(t + dur + 0.05);
   },
+  // Колокольчик: чистый тон и тихие «стеклянные» обертоны
+  bell(freq, dur, vol, when = 0) {
+    this.tone(freq, dur, { vol, when, attack: 0.004, wet: 0.5 });
+    this.tone(freq * 2.76, dur * 0.4, { vol: vol * 0.16, when, attack: 0.003, wet: 0.4 });
+    this.tone(freq * 5.4, dur * 0.15, { vol: vol * 0.05, when, attack: 0.002 });
+  },
+  hiss(dur, { freq = 2000, sweepTo = 0, q = 1, vol = 0.1, type = 'bandpass', attack = 0.003, when = 0 } = {}) {
+    const c = this.ctx;
+    if (!c || !S().sound) return;
+    const t = c.currentTime + when;
+    const src = c.createBufferSource();
+    src.buffer = this.noise;
+    const f = c.createBiquadFilter();
+    f.type = type;
+    f.Q.value = q;
+    f.frequency.setValueAtTime(freq, t);
+    if (sweepTo) f.frequency.exponentialRampToValueAtTime(sweepTo, t + dur);
+    const g = c.createGain();
+    this.env(g, t, vol, attack, dur);
+    src.connect(f).connect(g).connect(this.out);
+    src.start(t, Math.random() * 0.5);
+    src.stop(t + dur + 0.05);
+  },
+  // Деревянный щелчок колышка, с лёгким разбросом высоты, чтобы не звучал как метроном
   tick() {
     const c = this.ctx;
-    if (!c || c.currentTime - this.lastTick < 0.035) return;
+    if (!c || c.currentTime - this.lastTick < 0.04) return;
     this.lastTick = c.currentTime;
-    this.tone(1500, 0.05, 'square', 0.07, 0, 500);
+    const p = 0.9 + Math.random() * 0.2;
+    this.hiss(0.035, { freq: 1700 * p, q: 3, vol: 0.5, attack: 0.002 });
+    this.tone(820 * p, 0.045, { vol: 0.07, attack: 0.002 });
   },
-  start() { this.tone(180, 0.5, 'sine', 0.25, 0, 900); },
-  elim() { this.tone(440, 0.55, 'sawtooth', 0.12, 0, 80); this.tone(220, 0.4, 'square', 0.06, 0.05, 60); },
+  // Мягкий «вжух» при старте спина
+  start() { this.hiss(0.75, { freq: 280, sweepTo: 1600, q: 0.9, vol: 0.14, attack: 0.28 }); },
+  // Выбывание: приглушённое «бу-ум» вниз
+  elim() {
+    this.tone(330, 0.5, { vol: 0.15, slideTo: 160, wet: 0.25 });
+    this.tone(165, 0.4, { type: 'triangle', vol: 0.07, slideTo: 110, when: 0.02 });
+    this.hiss(0.14, { freq: 450, q: 0.7, vol: 0.05, type: 'lowpass' });
+  },
+  // Колесо выбрало игру: восходящий перелив
+  reveal() { [659.25, 783.99, 987.77, 1318.51].forEach((f, i) => this.bell(f, 1.2, 0.11, i * 0.09)); },
+  // Победа: арпеджио колокольчиков и тёплый аккорд под ним
   win() {
-    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => this.tone(f, 0.3, 'triangle', 0.25, i * 0.11));
-    [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach(f => this.tone(f, 1.6, 'sine', 0.12, 0.5));
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => this.bell(f, 1.0, 0.13, i * 0.12));
+    [523.25, 659.25, 783.99].forEach(f => this.tone(f, 2.3, { type: 'triangle', vol: 0.045, when: 0.5, attack: 0.3, wet: 0.4 }));
+    this.bell(1567.98, 1.6, 0.07, 0.56);
   },
-  join() { this.tone(880, 0.12, 'sine', 0.08, 0, 1320); },
+  join() { this.bell(1318.51, 0.35, 0.05); },
 };
 
 /* =====================================================================
@@ -635,7 +708,7 @@ async function eliminate(e) {
 // Осталась одна игра — показываем её и переходим к колесу участников
 async function chooseGame(g) {
   state.transitioning = true;
-  Sound.win();
+  Sound.reveal();
   if (S().confetti) Confetti.burst(innerWidth / 2, innerHeight * 0.4, 120, TAU, 0, 13);
   const box = $('#chosenGame');
   box.replaceChildren(
